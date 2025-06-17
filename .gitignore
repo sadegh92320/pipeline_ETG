@@ -1,0 +1,6 @@
+*.csv
+*.mp4
+venv/
+env/
+frame_check/
+fixation_results/
