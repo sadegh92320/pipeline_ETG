@@ -20,10 +20,19 @@ class DrivingDataManager:
     def __init__(self):
         pass
     def end_of_scenario_on_spawn(self, file, part_number):
-        condition = (file[' CarSpawned'] == " True") | (file[' PedSpawned'] == " True")
-                    
+        """Get the end of the file based on the event trigger.
+
+            Returns:
+                spawn_indice (int): index corresponding to 10sec after the
+                    event trigger, 0 if the event is never trigerred 
+        """
+
+        #Retrieve all indices where the event is triggered
+        condition = (file[' CarSpawned'] == " True") | (file[' PedSpawned'] == " True")            
         true_indices = file.index[condition].tolist()
+        #Check if the list is empty
         if len(true_indices) >0:
+            #If the event was triggered then add 10sec to the index
             spawn_indice = true_indices[0] + 110
             return spawn_indice
         else:

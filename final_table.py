@@ -66,7 +66,6 @@ class TableConstructor:
         #to move
         self.AOI = AOIs
         self.driving_data_processor = UtilitiesDrivingData()
-        self.etg_data_processor = UtilitiesETG()
         self.gaze_data_manager = GazeDataManager()
         self.video_manager = VideoManager()
         self.participant_info = ParticipantInfo(participant_info)
@@ -82,43 +81,65 @@ class TableConstructor:
     
 
     def get_participants_gaze(self):
+        """This method will take care of creating the table with all ETG data 
+            for each participants.
 
-        
+            Return:
+                df: pandas dataframe containing all the ETG.
+        """
+
+        #Initialize the list containing the ETG data
         final_data = []
+
+        #Loop through all eye tracking folder in the main folder containing all ETG participants
         for root, dirs, files in os.walk(self.eye_data):
+            #Loop through each directory in each folder
             for dir in dirs:
-                # Build the correct path to meta/participant
                 if dir == "meta":
                     continue
+                #Retrieve the GMT time at which the ETG data was recorded
                 time1 = self.gaze_data_manager.convert_gmt_time(dir)
+
+                #Retrieve the path to imudata, gazedata, eventdata
                 participant_path = os.path.join(root, dir, "meta", "participant")
                 imu_path = os.path.join(root, dir, "imudata.gz")
                 gaze_path = os.path.join(root, dir, "gazedata.gz")
                 event_path = os.path.join(root, dir, "eventdata.gz")
+
+                #Retrieve all recorded events
                 event_data = self.gaze_data_manager.retrieve_event_data(event_path)
-                
+
+                #Retrive the path to the ETG video
                 video = os.path.join(root, dir, "scenevideo.mp4")
+                #Use imu data and gaze data to create a pandas dataframe with all eye tracking data
                 try:
                     data_eye = convert(imu_path, gaze_path)
                 except:
                     print(f"Error processing {participant_path}")
                     continue
 
-
+                #Only keeping the eye tracking data (can be changed depending on needs)
                 eye_tracker_data = data_eye.loc[data_eye['label'] == "eye tracker"].reset_index(drop=True)
                 
+                #Some eye traking data starts at some odd time so if it is the case reset at 0
                 if int(eye_tracker_data["timestamp"][0]) > 1:
                     eye_tracker_data["timestamp"] = eye_tracker_data["timestamp"] - eye_tracker_data["timestamp"][0]
 
+                #Loop through all event retrieved previously
                 for d in range(len(event_data)):
                     
-                    
+                    #Retrive the participant number, the scene number, the type of event and the event coming after for each
+                    # event previously stored 
                     part_number, scene_number, scenario_event, scenario_next_event = self.gaze_data_manager.extract_participant_event_info(event_data[d], event_data[d+1])
+                    #Check if the current event is start of a successfull scenario
                     if self.gaze_data_manager.check_data_proceed(scene_number, scenario_event, scenario_next_event):
                                 
+                                #Get the start and end of the scenario in the eye tracking video, as well as the corresponding index
+                                # in the pandas dataframe storing eye traking data
                                 start_scene, end_scene, i_1, i_2 = self.gaze_data_manager.get_start_end_time(event_data[d], event_data[d+1], self.participants, eye_tracker_data, scene_number, part_number)
-                                duration = self.video_manager.get_video_length(video)
-                                results_AOI = self.gaze_data_manager.get_AOI_results(duration, end_scene, start_scene, eye_tracker_data, video, part_number, scene_number, self.AOI)
+
+                                #Retrive all AOI statistics
+                                results_AOI = self.gaze_data_manager.get_AOI_results(end_scene, start_scene, eye_tracker_data, video, part_number, scene_number, self.AOI)
 
                                                            
                                 
@@ -135,23 +156,29 @@ class TableConstructor:
                                     
                     
     def get_participants(self):
+        """Retrieve participants information from log data.
+        """
         participants = []
+        #Loop through all log data
         for filename in sorted(os.listdir(self.f)):
             
             f = os.path.join(self.f, filename)
-          
+
+            #If the file is very small then discard 
             if os.path.isfile(f) and os.path.getsize(f) >= 50 * 1024: 
                 pass
             else:
                 continue
+            #Retrieve the date and participant number based on the file name
             moving = filename.split("_")     
             part_number = moving[0]
             date = moving[2].replace(".csv", "")
-           
             formatted_date = datetime.strptime(date, "%Y%m%d").strftime("%d-%m-%Y")
+
             try:
                 
                 file = pd.read_csv(f)
+                #Get the end of the file based on the event trigger
                 spawn_indice = self.driving_data_manager.end_of_scenario_on_spawn(file, part_number)
 
                 collision = self.driving_data_manager.end_of_scenario_on_collision(file)
